@@ -9,22 +9,22 @@ const HLTV_RESULTS = 'https://www.hltv.org/results?event=9028';
 const HLTV_MATCHES = 'https://www.hltv.org/major/matches';
 
 const fallbackTeams = [
-  { id:'b8', logo:'/assets/logos/b8.svg', name:'B8', country:'UA', aliases:['B8'] },
-  { id:'tyloo', logo:'/assets/logos/tyloo.svg', name:'TYLOO', country:'CN', aliases:['TYLOO'] },
-  { id:'mibr', logo:'/assets/logos/mibr.svg', name:'MIBR', country:'BR', aliases:['MIBR'] },
-  { id:'thunder', logo:'/assets/logos/thunder.svg', name:'THUNDER dOWNUNDER', country:'AU', aliases:['THUNDER dOWNUNDER','THUNDER DOWNUNDER','TALON'] },
-  { id:'betboom', logo:'/assets/logos/betboom.svg', name:'BetBoom', country:'RU', aliases:['BetBoom','BetBoom Team'] },
-  { id:'gaimin', logo:'/assets/logos/gaimin.svg', name:'Gaimin Gladiators', country:'CA', aliases:['Gaimin Gladiators'] },
-  { id:'gamerlegion', logo:'/assets/logos/gamerlegion.svg', name:'GamerLegion', country:'EU', aliases:['GamerLegion'] },
-  { id:'nrg', logo:'/assets/logos/nrg.svg', name:'NRG', country:'US', aliases:['NRG'] },
-  { id:'heroic', logo:'/assets/logos/heroic.svg', name:'HEROIC', country:'NO', aliases:['HEROIC','Heroic'] },
-  { id:'sharks', logo:'/assets/logos/sharks.svg', name:'Sharks', country:'BR', aliases:['Sharks'] },
-  { id:'sinners', logo:'/assets/logos/sinners.svg', name:'SINNERS', country:'CZ', aliases:['SINNERS','Sinners'] },
-  { id:'flyquest', logo:'/assets/logos/flyquest.svg', name:'FlyQuest', country:'AU', aliases:['FlyQuest'] },
-  { id:'m80', logo:'/assets/logos/m80.svg', name:'M80', country:'US', aliases:['M80'] },
-  { id:'lynnvision', logo:'/assets/logos/lynnvision.svg', name:'Lynn Vision', country:'CN', aliases:['Lynn Vision','Lynn Vision Gaming'] },
-  { id:'big', logo:'/assets/logos/big.svg', name:'BIG', country:'DE', aliases:['BIG'] },
-  { id:'liquid', logo:'/assets/logos/liquid.svg', name:'Liquid', country:'US', aliases:['Liquid','Team Liquid'] }
+  { id:'b8', hltvId:11241, slug:'b8', logo:null, name:'B8', country:'UA', aliases:['B8'] },
+  { id:'tyloo', hltvId:4863, slug:'tyloo', logo:null, name:'TYLOO', country:'CN', aliases:['TYLOO'] },
+  { id:'mibr', hltvId:9215, slug:'mibr', logo:null, name:'MIBR', country:'BR', aliases:['MIBR'] },
+  { id:'thunder', hltvId:13486, slug:'thunder-downunder', logo:null, name:'THUNDER dOWNUNDER', country:'AU', aliases:['THUNDER dOWNUNDER','THUNDER DOWNUNDER','TALON'] },
+  { id:'betboom', hltvId:12394, slug:'betboom', logo:null, name:'BetBoom', country:'RU', aliases:['BetBoom','BetBoom Team'] },
+  { id:'gaimin', hltvId:11571, slug:'gaimin-gladiators', logo:null, name:'Gaimin Gladiators', country:'CA', aliases:['Gaimin Gladiators'] },
+  { id:'gamerlegion', hltvId:9928, slug:'gamerlegion', logo:null, name:'GamerLegion', country:'EU', aliases:['GamerLegion'] },
+  { id:'nrg', hltvId:6673, slug:'nrg', logo:null, name:'NRG', country:'US', aliases:['NRG'] },
+  { id:'heroic', hltvId:7175, slug:'heroic', logo:null, name:'HEROIC', country:'NO', aliases:['HEROIC','Heroic'] },
+  { id:'sharks', hltvId:8113, slug:'sharks', logo:null, name:'Sharks', country:'BR', aliases:['Sharks'] },
+  { id:'sinners', hltvId:10577, slug:'sinners', logo:null, name:'SINNERS', country:'CZ', aliases:['SINNERS','Sinners'] },
+  { id:'flyquest', hltvId:12774, slug:'flyquest', logo:null, name:'FlyQuest', country:'AU', aliases:['FlyQuest'] },
+  { id:'m80', hltvId:12376, slug:'m80', logo:null, name:'M80', country:'US', aliases:['M80'] },
+  { id:'lynnvision', hltvId:8840, slug:'lynn-vision', logo:null, name:'Lynn Vision', country:'CN', aliases:['Lynn Vision','Lynn Vision Gaming'] },
+  { id:'big', hltvId:7532, slug:'big', logo:null, name:'BIG', country:'DE', aliases:['BIG'] },
+  { id:'liquid', hltvId:5973, slug:'liquid', logo:null, name:'Liquid', country:'US', aliases:['Liquid','Team Liquid'] }
 ];
 
 const fallbackUpcoming = [
@@ -50,10 +50,67 @@ function send(res, status, body, type='application/json') {
 }
 function normalize(s) { return String(s||'').toLowerCase().replace(/&amp;/g,'&').replace(/[^a-z0-9]+/g,' ').trim(); }
 function stripTags(s) { return String(s||'').replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim(); }
-async function fetchText(url) {
-  const r = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36', 'accept-language':'en-US,en;q=0.9' } });
-  if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`);
-  return await r.text();
+async function fetchText(url, timeoutMs = 9000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
+        'accept-language':'en-US,en;q=0.9',
+        'accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'referer':'https://www.hltv.org/'
+      }
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`);
+    return await r.text();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const logoCache = new Map();
+function hltvTeamUrl(team) {
+  return `https://www.hltv.org/team/${team.hltvId}/${team.slug}`;
+}
+function normalizeLogoUrl(src) {
+  if (!src) return null;
+  src = src.replace(/&amp;/g, '&').trim();
+  if (src.startsWith('//')) src = 'https:' + src;
+  if (src.startsWith('/')) src = 'https://www.hltv.org' + src;
+  return src;
+}
+function extractHltvLogo(html) {
+  const patterns = [
+    /https:\/\/img-cdn\.hltv\.org\/teamlogo\/[^"'\s<>]+/i,
+    /src=["']([^"']*\/teamlogo\/[^"']+)["']/i,
+    /srcset=["']([^"']*\/teamlogo\/[^"'\s,]+)[^"']*["']/i
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    const raw = m && (m[1] || m[0]);
+    if (raw) return normalizeLogoUrl(raw.split(' ')[0]);
+  }
+  return null;
+}
+async function getHltvLogo(team) {
+  const cached = logoCache.get(team.id);
+  const now = Date.now();
+  if (cached && now - cached.at < 1000 * 60 * 60 * 6) return cached.url;
+  const html = await fetchText(hltvTeamUrl(team), 7000);
+  const url = extractHltvLogo(html);
+  if (!url) throw new Error(`Logo not found for ${team.name}`);
+  logoCache.set(team.id, { url, at: now });
+  return url;
+}
+async function getAllHltvLogos() {
+  const entries = await Promise.allSettled(fallbackTeams.map(async (team) => [team.id, await getHltvLogo(team)]));
+  const logos = {};
+  for (const item of entries) {
+    if (item.status === 'fulfilled') logos[item.value[0]] = item.value[1];
+  }
+  return logos;
 }
 function teamByName(name) {
   const n = normalize(name);
@@ -138,16 +195,20 @@ async function liveData() {
   try {
     const [eventHtml, resultsHtml, matchesHtml] = await Promise.all([fetchText(HLTV_EVENT), fetchText(HLTV_RESULTS), fetchText(HLTV_MATCHES).catch(()=> '')]);
     source = 'hltv';
-    logos = parseLogos(eventHtml + resultsHtml);
+    const eventLogos = parseLogos(eventHtml + resultsHtml);
+    logos = { ...eventLogos, ...(await getAllHltvLogos()) };
     const parsed = parseResults(resultsHtml);
     if (parsed.length) matches = parsed;
     const upcoming = matchesHtml ? parseUpcoming(matchesHtml) : [];
     if (upcoming.length) schedule = upcoming;
-  } catch (e) { errors.push(e.message); }
+  } catch (e) {
+    errors.push(e.message);
+    try { logos = await getAllHltvLogos(); } catch (logoError) { errors.push(logoError.message); }
+  }
   const standings = standingsFromMatches(matches);
   for (const id in standings) {
     const base = fallbackTeams.find(t => t.id === id);
-    standings[id].logo = logos[id] || base?.logo || null;
+    standings[id].logo = logos[id] || null;
   }
   return { ok:true, source, updatedAt:new Date().toISOString(), event:{ name:'IEM Cologne Major 2026 — Stage 1', hltv:HLTV_EVENT }, teams:fallbackTeams.map(t => ({...t, logo:standings[t.id].logo})), matches, schedule, standings:Object.values(standings), errors };
 }
@@ -155,6 +216,18 @@ async function liveData() {
 const server = http.createServer(async (req, res) => {
   try {
     const u = new URL(req.url, `http://${req.headers.host}`);
+    if (u.pathname.startsWith('/api/logo/')) {
+      const id = u.pathname.split('/').pop();
+      const team = fallbackTeams.find(t => t.id === id);
+      if (!team) return send(res, 404, 'Team not found', 'text/plain');
+      try {
+        const logo = await getHltvLogo(team);
+        res.writeHead(302, { Location: logo, 'Cache-Control': 'public, max-age=21600' });
+        return res.end();
+      } catch (e) {
+        return send(res, 404, `HLTV logo not available for ${team.name}`, 'text/plain');
+      }
+    }
     if (u.pathname === '/api/live') return send(res, 200, JSON.stringify(await liveData()));
     if (u.pathname === '/api/health') return send(res, 200, JSON.stringify({ok:true}));
     let filePath = path.join(__dirname, 'public', u.pathname === '/' ? 'index.html' : decodeURIComponent(u.pathname));

@@ -1,27 +1,27 @@
-# CS2 Pick'em Live Tracker — Thiago Deluca
+# CS2 Pick'em Tracker — Thiago Deluca
 
-Tracker visual de Pick'em para CS2 Major com palpites editáveis, logos quando disponíveis, atualização via HLTV e validação automática: correto, com chance ou sem chance.
+Tracker web para Pick'em do IEM Cologne Major 2026.
 
-## Rodar localmente
+## Rodar local
 
 ```bash
+npm install
 npm start
 ```
 
 Abra:
 
-```txt
+```text
 http://localhost:8080
 ```
 
-## Deploy grátis recomendado
+## Logos
 
-### Render
-- Tipo: Web Service
-- Runtime: Node
-- Build command: vazio ou `npm install`
-- Start command: `npm start`
-- Porta: Render injeta `PORT` automaticamente
+Os logos agora vêm direto da HLTV:
 
-### Vercel / Netlify
-Também dá, mas para ficar perfeito precisa adaptar `/api/live` para serverless function. Para este projeto simples com backend Node puro, Render é o caminho mais direto.
+- `/api/logo/:teamId` busca a página oficial do time na HLTV;
+- extrai a URL original do `img-cdn.hltv.org/teamlogo/...`;
+- redireciona o navegador para o logo real;
+- `/api/live` também tenta preencher os logos usando as páginas oficiais da HLTV.
+
+Se a HLTV bloquear a request no servidor, o app mostra apenas as iniciais temporariamente, sem usar logo fake.
