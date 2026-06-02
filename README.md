@@ -48,3 +48,7 @@ npm start
 - O front consome `/api/event-state`.
 - Os palpites do usuário ficam no `localStorage` do navegador.
 - Se a API falhar ou não achar o evento pelo nome, o projeto mantém fallback para não quebrar a tela.
+
+
+## v2
+- Layout refinado: cards mais legíveis, colunas mais estáveis, cores estilo Steam/dark dashboard e melhor responsividade.
