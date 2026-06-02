@@ -25,4 +25,3 @@ http://localhost:8080
 
 ### Vercel / Netlify
 Também dá, mas para ficar perfeito precisa adaptar `/api/live` para serverless function. Para este projeto simples com backend Node puro, Render é o caminho mais direto.
-# cs2-pickem-tracker

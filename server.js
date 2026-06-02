@@ -9,22 +9,22 @@ const HLTV_RESULTS = 'https://www.hltv.org/results?event=9028';
 const HLTV_MATCHES = 'https://www.hltv.org/major/matches';
 
 const fallbackTeams = [
-  { id:'b8', name:'B8', country:'UA', aliases:['B8'] },
-  { id:'tyloo', name:'TYLOO', country:'CN', aliases:['TYLOO'] },
-  { id:'mibr', name:'MIBR', country:'BR', aliases:['MIBR'] },
-  { id:'thunder', name:'THUNDER dOWNUNDER', country:'AU', aliases:['THUNDER dOWNUNDER','THUNDER DOWNUNDER','TALON'] },
-  { id:'betboom', name:'BetBoom', country:'RU', aliases:['BetBoom','BetBoom Team'] },
-  { id:'gaimin', name:'Gaimin Gladiators', country:'CA', aliases:['Gaimin Gladiators'] },
-  { id:'gamerlegion', name:'GamerLegion', country:'EU', aliases:['GamerLegion'] },
-  { id:'nrg', name:'NRG', country:'US', aliases:['NRG'] },
-  { id:'heroic', name:'HEROIC', country:'NO', aliases:['HEROIC','Heroic'] },
-  { id:'sharks', name:'Sharks', country:'BR', aliases:['Sharks'] },
-  { id:'sinners', name:'SINNERS', country:'CZ', aliases:['SINNERS','Sinners'] },
-  { id:'flyquest', name:'FlyQuest', country:'AU', aliases:['FlyQuest'] },
-  { id:'m80', name:'M80', country:'US', aliases:['M80'] },
-  { id:'lynnvision', name:'Lynn Vision', country:'CN', aliases:['Lynn Vision','Lynn Vision Gaming'] },
-  { id:'big', name:'BIG', country:'DE', aliases:['BIG'] },
-  { id:'liquid', name:'Liquid', country:'US', aliases:['Liquid','Team Liquid'] }
+  { id:'b8', logo:'/assets/logos/b8.svg', name:'B8', country:'UA', aliases:['B8'] },
+  { id:'tyloo', logo:'/assets/logos/tyloo.svg', name:'TYLOO', country:'CN', aliases:['TYLOO'] },
+  { id:'mibr', logo:'/assets/logos/mibr.svg', name:'MIBR', country:'BR', aliases:['MIBR'] },
+  { id:'thunder', logo:'/assets/logos/thunder.svg', name:'THUNDER dOWNUNDER', country:'AU', aliases:['THUNDER dOWNUNDER','THUNDER DOWNUNDER','TALON'] },
+  { id:'betboom', logo:'/assets/logos/betboom.svg', name:'BetBoom', country:'RU', aliases:['BetBoom','BetBoom Team'] },
+  { id:'gaimin', logo:'/assets/logos/gaimin.svg', name:'Gaimin Gladiators', country:'CA', aliases:['Gaimin Gladiators'] },
+  { id:'gamerlegion', logo:'/assets/logos/gamerlegion.svg', name:'GamerLegion', country:'EU', aliases:['GamerLegion'] },
+  { id:'nrg', logo:'/assets/logos/nrg.svg', name:'NRG', country:'US', aliases:['NRG'] },
+  { id:'heroic', logo:'/assets/logos/heroic.svg', name:'HEROIC', country:'NO', aliases:['HEROIC','Heroic'] },
+  { id:'sharks', logo:'/assets/logos/sharks.svg', name:'Sharks', country:'BR', aliases:['Sharks'] },
+  { id:'sinners', logo:'/assets/logos/sinners.svg', name:'SINNERS', country:'CZ', aliases:['SINNERS','Sinners'] },
+  { id:'flyquest', logo:'/assets/logos/flyquest.svg', name:'FlyQuest', country:'AU', aliases:['FlyQuest'] },
+  { id:'m80', logo:'/assets/logos/m80.svg', name:'M80', country:'US', aliases:['M80'] },
+  { id:'lynnvision', logo:'/assets/logos/lynnvision.svg', name:'Lynn Vision', country:'CN', aliases:['Lynn Vision','Lynn Vision Gaming'] },
+  { id:'big', logo:'/assets/logos/big.svg', name:'BIG', country:'DE', aliases:['BIG'] },
+  { id:'liquid', logo:'/assets/logos/liquid.svg', name:'Liquid', country:'US', aliases:['Liquid','Team Liquid'] }
 ];
 
 const fallbackUpcoming = [
@@ -145,7 +145,10 @@ async function liveData() {
     if (upcoming.length) schedule = upcoming;
   } catch (e) { errors.push(e.message); }
   const standings = standingsFromMatches(matches);
-  for (const id in standings) standings[id].logo = logos[id] || null;
+  for (const id in standings) {
+    const base = fallbackTeams.find(t => t.id === id);
+    standings[id].logo = logos[id] || base?.logo || null;
+  }
   return { ok:true, source, updatedAt:new Date().toISOString(), event:{ name:'IEM Cologne Major 2026 — Stage 1', hltv:HLTV_EVENT }, teams:fallbackTeams.map(t => ({...t, logo:standings[t.id].logo})), matches, schedule, standings:Object.values(standings), errors };
 }
 

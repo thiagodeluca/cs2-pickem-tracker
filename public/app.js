@@ -1,6 +1,6 @@
 const TEAMS = [
   ['b8','B8','UA'],['tyloo','TYLOO','CN'],['mibr','MIBR','BR'],['thunder','THUNDER dOWNUNDER','AU'],['betboom','BetBoom','RU'],['gaimin','Gaimin Gladiators','CA'],['gamerlegion','GamerLegion','EU'],['nrg','NRG','US'],['heroic','HEROIC','NO'],['sharks','Sharks','BR'],['sinners','SINNERS','CZ'],['flyquest','FlyQuest','AU'],['m80','M80','US'],['lynnvision','Lynn Vision','CN'],['big','BIG','DE'],['liquid','Liquid','US']
-].map(([id,name,country])=>({id,name,country}));
+].map(([id,name,country])=>({id,name,country, logo:`/assets/logos/${id}.svg`}));
 
 const STORAGE_KEY = 'thiago-cs2-pickem:v3';
 const emptyPicks = () => ({
@@ -20,7 +20,7 @@ const PHASES = [
   { id:'playoffs', label:'MATA-MATA', title:'Mata-mata', subtitle:'Será liberado automaticamente quando os playoffs começarem.', unlockAt:'2026-06-11T11:00:00-03:00' },
 ];
 
-const fallbackLive = { standings:Object.fromEntries(TEAMS.map(t=>[t.id,{...t,wins:0,losses:0,status:'alive',logo:null}])), matches:[], schedule:[], source:'manual', updatedAt:null };
+const fallbackLive = { standings:Object.fromEntries(TEAMS.map(t=>[t.id,{...t,wins:0,losses:0,status:'alive',logo:t.logo}])), matches:[], schedule:[], source:'manual', updatedAt:null };
 let state = loadState();
 let live = fallbackLive;
 
@@ -37,7 +37,7 @@ function currentStage(){ return state.stages[state.phase] || state.stages.stage1
 function isUnlocked(phase){ return Date.now() >= new Date(phase.unlockAt).getTime(); }
 function fmtDate(iso){ return new Date(iso).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
 function byId(id){ return TEAMS.find(t=>t.id===id) || {id,name:id,country:''}; }
-function standing(id){ return live.standings[id] || {id, wins:0, losses:0, status:'alive', logo:null}; }
+function standing(id){ const t = byId(id); return live.standings[id] || {id, name:t.name, wins:0, losses:0, status:'alive', logo:t.logo}; }
 
 function statusForPick(id, zone){
   const s = standing(id);
@@ -62,7 +62,8 @@ function statusLabel(st){ return ({correct:'certo',alive:'com chance',dead:'sem 
 function initials(n){ return n.split(/\s+/).map(x=>x[0]).join('').slice(0,2).toUpperCase(); }
 function logoHtml(t){
   const s = standing(t.id);
-  if(s.logo) return `<span class="logo"><img src="${s.logo}" onerror="this.remove();this.parentElement.textContent='${initials(t.name)}'" /></span>`;
+  const src = s.logo || t.logo;
+  if(src) return `<span class="logo"><img src="${src}" alt="${t.name}" onerror="this.remove();this.parentElement.textContent='${initials(t.name)}'" /></span>`;
   return `<span class="logo">${initials(t.name)}</span>`;
 }
 function teamCard(id, zone='pool'){
