@@ -9,24 +9,82 @@ const HLTV_RESULTS = 'https://www.hltv.org/results?event=9028';
 const HLTV_MATCHES = 'https://www.hltv.org/major/matches';
 
 const fallbackTeams = [
-  { id:'b8', hltvId:11241, slug:'b8', logo:null, name:'B8', country:'UA', aliases:['B8'] },
-  { id:'tyloo', hltvId:4863, slug:'tyloo', logo:null, name:'TYLOO', country:'CN', aliases:['TYLOO'] },
-  { id:'mibr', hltvId:9215, slug:'mibr', logo:null, name:'MIBR', country:'BR', aliases:['MIBR'] },
-  { id:'thunder', hltvId:13486, slug:'thunder-downunder', logo:null, name:'THUNDER dOWNUNDER', country:'AU', aliases:['THUNDER dOWNUNDER','THUNDER DOWNUNDER','TALON'] },
-  { id:'betboom', hltvId:12394, slug:'betboom', logo:null, name:'BetBoom', country:'RU', aliases:['BetBoom','BetBoom Team'] },
-  { id:'gaimin', hltvId:11571, slug:'gaimin-gladiators', logo:null, name:'Gaimin Gladiators', country:'CA', aliases:['Gaimin Gladiators'] },
-  { id:'gamerlegion', hltvId:9928, slug:'gamerlegion', logo:null, name:'GamerLegion', country:'EU', aliases:['GamerLegion'] },
-  { id:'nrg', hltvId:6673, slug:'nrg', logo:null, name:'NRG', country:'US', aliases:['NRG'] },
-  { id:'heroic', hltvId:7175, slug:'heroic', logo:null, name:'HEROIC', country:'NO', aliases:['HEROIC','Heroic'] },
-  { id:'sharks', hltvId:8113, slug:'sharks', logo:null, name:'Sharks', country:'BR', aliases:['Sharks'] },
-  { id:'sinners', hltvId:10577, slug:'sinners', logo:null, name:'SINNERS', country:'CZ', aliases:['SINNERS','Sinners'] },
-  { id:'flyquest', hltvId:12774, slug:'flyquest', logo:null, name:'FlyQuest', country:'AU', aliases:['FlyQuest'] },
-  { id:'m80', hltvId:12376, slug:'m80', logo:null, name:'M80', country:'US', aliases:['M80'] },
-  { id:'lynnvision', hltvId:8840, slug:'lynn-vision', logo:null, name:'Lynn Vision', country:'CN', aliases:['Lynn Vision','Lynn Vision Gaming'] },
-  { id:'big', hltvId:7532, slug:'big', logo:null, name:'BIG', country:'DE', aliases:['BIG'] },
-  { id:'liquid', hltvId:5973, slug:'liquid', logo:null, name:'Liquid', country:'US', aliases:['Liquid','Team Liquid'] }
+  { id:'b8', name:'B8', country:'UA', aliases:['B8'], domains:['b8esports.gg'], logoSlugs:['b8','b8-esports'] },
+  { id:'tyloo', name:'TYLOO', country:'CN', aliases:['TYLOO'], domains:['tyloo.com'], logoSlugs:['tyloo'] },
+  { id:'mibr', name:'MIBR', country:'BR', aliases:['MIBR'], domains:['mibr.gg'], logoSlugs:['mibr'] },
+  { id:'thunder', name:'THUNDER dOWNUNDER', country:'AU', aliases:['THUNDER dOWNUNDER','THUNDER DOWNUNDER','TALON'], domains:['talon.gg','thunderdownunder.com.au','thunderdownunder.gg'], logoSlugs:['talon-esports','thunder-downunder','thunder'] },
+  { id:'betboom', name:'BetBoom', country:'RU', aliases:['BetBoom','BetBoom Team'], domains:['betboom.team'], logoSlugs:['betboom-team','betboom'] },
+  { id:'gaimin', name:'Gaimin Gladiators', country:'CA', aliases:['Gaimin Gladiators'], domains:['gaimingladiators.gg','gaimingladiators.com'], logoSlugs:['gaimin-gladiators','gaimingladiators'] },
+  { id:'gamerlegion', name:'GamerLegion', country:'EU', aliases:['GamerLegion'], domains:['gamerlegion.gg'], logoSlugs:['gamerlegion','gamer-legion'] },
+  { id:'nrg', name:'NRG', country:'US', aliases:['NRG','NRG Esports'], domains:['nrg.gg'], logoSlugs:['nrg-esports','nrg'] },
+  { id:'heroic', name:'HEROIC', country:'NO', aliases:['HEROIC','Heroic'], domains:['heroic.gg'], logoSlugs:['heroic'] },
+  { id:'sharks', name:'Sharks', country:'BR', aliases:['Sharks','Sharks Esports'], domains:['sharksesports.com.br'], logoSlugs:['sharks-esports','sharks'] },
+  { id:'sinners', name:'SINNERS', country:'CZ', aliases:['SINNERS','Sinners'], domains:['sinners.gg'], logoSlugs:['sinners-esports','sinners'] },
+  { id:'flyquest', name:'FlyQuest', country:'AU', aliases:['FlyQuest'], domains:['flyquest.gg'], logoSlugs:['flyquest','fly-quest'] },
+  { id:'m80', name:'M80', country:'US', aliases:['M80'], domains:['m80.gg'], logoSlugs:['m80'] },
+  { id:'lynnvision', name:'Lynn Vision', country:'CN', aliases:['Lynn Vision','Lynn Vision Gaming'], domains:['lynnvision.com'], logoSlugs:['lynn-vision-gaming','lynn-vision'] },
+  { id:'big', name:'BIG', country:'DE', aliases:['BIG'], domains:['bigclan.gg'], logoSlugs:['big','berlin-international-gaming'] },
+  { id:'liquid', name:'Liquid', country:'US', aliases:['Liquid','Team Liquid'], domains:['teamliquid.com'], logoSlugs:['team-liquid','liquid'] }
 ];
 
+const LOGO_REPO_BASES = [
+  'https://esport-team-logos.global.ssl.fastly.net/esport-team-logos/csgo',
+  'https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/csgo'
+];
+
+function logoCandidateUrls(team) {
+  const urls = [];
+  for (const slug of team.logoSlugs || []) {
+    for (const base of LOGO_REPO_BASES) urls.push(`${base}/${slug}/${slug}-logo.png`);
+  }
+  for (const domain of team.domains || []) {
+    urls.push(`https://logo.clearbit.com/${domain}?size=256`);
+    urls.push(`https://unavatar.io/${domain}?fallback=false`);
+    urls.push(`https://www.google.com/s2/favicons?domain=${domain}&sz=256`);
+  }
+  return [...new Set(urls)];
+}
+
+const logoImageCache = new Map();
+async function fetchImage(url, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
+        'accept':'image/avif,image/webp,image/png,image/svg+xml,image/*,*/*;q=0.8'
+      }
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const type = r.headers.get('content-type') || 'image/png';
+    if (!type.toLowerCase().includes('image')) throw new Error(`Not image: ${type}`);
+    const arrayBuffer = await r.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    if (buffer.length < 100) throw new Error('Image too small');
+    return { buffer, type };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function getLogoImage(team) {
+  const cached = logoImageCache.get(team.id);
+  const now = Date.now();
+  if (cached && now - cached.at < 1000 * 60 * 60 * 24) return cached;
+  const errors = [];
+  for (const url of logoCandidateUrls(team)) {
+    try {
+      const image = await fetchImage(url);
+      const found = { ...image, at: now, source: url };
+      logoImageCache.set(team.id, found);
+      return found;
+    } catch (e) {
+      errors.push(`${url}: ${e.message}`);
+    }
+  }
+  throw new Error(`Logo not available for ${team.name}. Tried ${errors.length} sources.`);
+}
 const fallbackUpcoming = [
   { a:'B8', b:'M80', startsAt:'2026-06-02T17:00:00-03:00', dateText:'02/06 17:00', round:'2-0' },
   { a:'MIBR', b:'Lynn Vision', startsAt:'2026-06-02T18:00:00-03:00', dateText:'02/06 18:00', round:'1-1' },
@@ -70,48 +128,6 @@ async function fetchText(url, timeoutMs = 9000) {
   }
 }
 
-const logoCache = new Map();
-function hltvTeamUrl(team) {
-  return `https://www.hltv.org/team/${team.hltvId}/${team.slug}`;
-}
-function normalizeLogoUrl(src) {
-  if (!src) return null;
-  src = src.replace(/&amp;/g, '&').trim();
-  if (src.startsWith('//')) src = 'https:' + src;
-  if (src.startsWith('/')) src = 'https://www.hltv.org' + src;
-  return src;
-}
-function extractHltvLogo(html) {
-  const patterns = [
-    /https:\/\/img-cdn\.hltv\.org\/teamlogo\/[^"'\s<>]+/i,
-    /src=["']([^"']*\/teamlogo\/[^"']+)["']/i,
-    /srcset=["']([^"']*\/teamlogo\/[^"'\s,]+)[^"']*["']/i
-  ];
-  for (const re of patterns) {
-    const m = html.match(re);
-    const raw = m && (m[1] || m[0]);
-    if (raw) return normalizeLogoUrl(raw.split(' ')[0]);
-  }
-  return null;
-}
-async function getHltvLogo(team) {
-  const cached = logoCache.get(team.id);
-  const now = Date.now();
-  if (cached && now - cached.at < 1000 * 60 * 60 * 6) return cached.url;
-  const html = await fetchText(hltvTeamUrl(team), 7000);
-  const url = extractHltvLogo(html);
-  if (!url) throw new Error(`Logo not found for ${team.name}`);
-  logoCache.set(team.id, { url, at: now });
-  return url;
-}
-async function getAllHltvLogos() {
-  const entries = await Promise.allSettled(fallbackTeams.map(async (team) => [team.id, await getHltvLogo(team)]));
-  const logos = {};
-  for (const item of entries) {
-    if (item.status === 'fulfilled') logos[item.value[0]] = item.value[1];
-  }
-  return logos;
-}
 function teamByName(name) {
   const n = normalize(name);
   return fallbackTeams.find(t => [t.name, ...(t.aliases||[])].some(a => normalize(a) === n))
@@ -195,22 +211,21 @@ async function liveData() {
   try {
     const [eventHtml, resultsHtml, matchesHtml] = await Promise.all([fetchText(HLTV_EVENT), fetchText(HLTV_RESULTS), fetchText(HLTV_MATCHES).catch(()=> '')]);
     source = 'hltv';
-    const eventLogos = parseLogos(eventHtml + resultsHtml);
-    logos = { ...eventLogos, ...(await getAllHltvLogos()) };
+    logos = Object.fromEntries(fallbackTeams.map(t => [t.id, `/api/logo/${t.id}`]));
     const parsed = parseResults(resultsHtml);
     if (parsed.length) matches = parsed;
     const upcoming = matchesHtml ? parseUpcoming(matchesHtml) : [];
     if (upcoming.length) schedule = upcoming;
   } catch (e) {
     errors.push(e.message);
-    try { logos = await getAllHltvLogos(); } catch (logoError) { errors.push(logoError.message); }
+    logos = Object.fromEntries(fallbackTeams.map(t => [t.id, `/api/logo/${t.id}`]));
   }
   const standings = standingsFromMatches(matches);
   for (const id in standings) {
     const base = fallbackTeams.find(t => t.id === id);
     standings[id].logo = logos[id] || null;
   }
-  return { ok:true, source, updatedAt:new Date().toISOString(), event:{ name:'IEM Cologne Major 2026 — Stage 1', hltv:HLTV_EVENT }, teams:fallbackTeams.map(t => ({...t, logo:standings[t.id].logo})), matches, schedule, standings:Object.values(standings), errors };
+  return { ok:true, source, updatedAt:new Date().toISOString(), event:{ name:'IEM Cologne Major 2026 — Stage 1', hltv:HLTV_EVENT }, teams:fallbackTeams.map(t => ({ id:t.id, name:t.name, country:t.country, aliases:t.aliases, logo:`/api/logo/${t.id}` })), matches, schedule, standings:Object.values(standings), errors };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -221,11 +236,15 @@ const server = http.createServer(async (req, res) => {
       const team = fallbackTeams.find(t => t.id === id);
       if (!team) return send(res, 404, 'Team not found', 'text/plain');
       try {
-        const logo = await getHltvLogo(team);
-        res.writeHead(302, { Location: logo, 'Cache-Control': 'public, max-age=21600' });
-        return res.end();
+        const img = await getLogoImage(team);
+        res.writeHead(200, {
+          'Content-Type': img.type,
+          'Cache-Control': 'public, max-age=86400',
+          'X-Logo-Source': img.source
+        });
+        return res.end(img.buffer);
       } catch (e) {
-        return send(res, 404, `HLTV logo not available for ${team.name}`, 'text/plain');
+        return send(res, 404, `Logo not available for ${team.name}`, 'text/plain');
       }
     }
     if (u.pathname === '/api/live') return send(res, 200, JSON.stringify(await liveData()));
@@ -236,7 +255,7 @@ const server = http.createServer(async (req, res) => {
     fs.readFile(filePath, (err, data) => {
       if (err) return send(res, 404, 'Not found', 'text/plain');
       const ext = path.extname(filePath).toLowerCase();
-      const types = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8','.svg':'image/svg+xml'};
+      const types = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
       send(res, 200, data, types[ext] || 'application/octet-stream');
     });
   } catch(e) { send(res, 500, JSON.stringify({ok:false,error:e.message})); }

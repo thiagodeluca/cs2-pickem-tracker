@@ -2,7 +2,7 @@ const TEAMS = [
   ['b8','B8','UA'],['tyloo','TYLOO','CN'],['mibr','MIBR','BR'],['thunder','THUNDER dOWNUNDER','AU'],['betboom','BetBoom','RU'],['gaimin','Gaimin Gladiators','CA'],['gamerlegion','GamerLegion','EU'],['nrg','NRG','US'],['heroic','HEROIC','NO'],['sharks','Sharks','BR'],['sinners','SINNERS','CZ'],['flyquest','FlyQuest','AU'],['m80','M80','US'],['lynnvision','Lynn Vision','CN'],['big','BIG','DE'],['liquid','Liquid','US']
 ].map(([id,name,country])=>({id,name,country, logo:`/api/logo/${id}`}));
 
-const STORAGE_KEY = 'thiago-cs2-pickem:v5';
+const STORAGE_KEY = 'thiago-cs2-pickem:v6';
 const emptyPicks = () => ({
   phase: 'stage1',
   stages: {
