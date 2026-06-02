@@ -4,260 +4,308 @@ const path = require('path');
 const { URL } = require('url');
 
 const PORT = process.env.PORT || 8080;
-const HLTV_EVENT = 'https://www.hltv.org/events/9028/iem-cologne-major-2026-stage-1';
-const HLTV_RESULTS = 'https://www.hltv.org/results?event=9028';
-const HLTV_MATCHES = 'https://www.hltv.org/major/matches';
+const PUBLIC_DIR = path.join(__dirname, 'public');
+const PANDASCORE_TOKEN = process.env.PANDASCORE_TOKEN || '';
+const EVENT_NAME = process.env.EVENT_NAME || 'IEM Cologne Major 2026';
+const EVENT_KEYWORDS = (process.env.EVENT_KEYWORDS || 'iem,cologne,major')
+  .split(',')
+  .map(s => s.trim().toLowerCase())
+  .filter(Boolean);
+const EVENT_START = process.env.EVENT_START || '2026-06-02T00:00:00Z';
+const EVENT_END = process.env.EVENT_END || '2026-06-09T23:59:59Z';
+const CACHE_SECONDS = Number(process.env.CACHE_SECONDS || 45);
+const API_BASE = 'https://api.pandascore.co';
 
 const fallbackTeams = [
-  { id:'b8', name:'B8', country:'UA', aliases:['B8'], domains:['b8esports.gg'], logoSlugs:['b8','b8-esports'] },
-  { id:'tyloo', name:'TYLOO', country:'CN', aliases:['TYLOO'], domains:['tyloo.com'], logoSlugs:['tyloo'] },
-  { id:'mibr', name:'MIBR', country:'BR', aliases:['MIBR'], domains:['mibr.gg'], logoSlugs:['mibr'] },
-  { id:'thunder', name:'THUNDER dOWNUNDER', country:'AU', aliases:['THUNDER dOWNUNDER','THUNDER DOWNUNDER','TALON'], domains:['talon.gg','thunderdownunder.com.au','thunderdownunder.gg'], logoSlugs:['talon-esports','thunder-downunder','thunder'] },
-  { id:'betboom', name:'BetBoom', country:'RU', aliases:['BetBoom','BetBoom Team'], domains:['betboom.team'], logoSlugs:['betboom-team','betboom'] },
-  { id:'gaimin', name:'Gaimin Gladiators', country:'CA', aliases:['Gaimin Gladiators'], domains:['gaimingladiators.gg','gaimingladiators.com'], logoSlugs:['gaimin-gladiators','gaimingladiators'] },
-  { id:'gamerlegion', name:'GamerLegion', country:'EU', aliases:['GamerLegion'], domains:['gamerlegion.gg'], logoSlugs:['gamerlegion','gamer-legion'] },
-  { id:'nrg', name:'NRG', country:'US', aliases:['NRG','NRG Esports'], domains:['nrg.gg'], logoSlugs:['nrg-esports','nrg'] },
-  { id:'heroic', name:'HEROIC', country:'NO', aliases:['HEROIC','Heroic'], domains:['heroic.gg'], logoSlugs:['heroic'] },
-  { id:'sharks', name:'Sharks', country:'BR', aliases:['Sharks','Sharks Esports'], domains:['sharksesports.com.br'], logoSlugs:['sharks-esports','sharks'] },
-  { id:'sinners', name:'SINNERS', country:'CZ', aliases:['SINNERS','Sinners'], domains:['sinners.gg'], logoSlugs:['sinners-esports','sinners'] },
-  { id:'flyquest', name:'FlyQuest', country:'AU', aliases:['FlyQuest'], domains:['flyquest.gg'], logoSlugs:['flyquest','fly-quest'] },
-  { id:'m80', name:'M80', country:'US', aliases:['M80'], domains:['m80.gg'], logoSlugs:['m80'] },
-  { id:'lynnvision', name:'Lynn Vision', country:'CN', aliases:['Lynn Vision','Lynn Vision Gaming'], domains:['lynnvision.com'], logoSlugs:['lynn-vision-gaming','lynn-vision'] },
-  { id:'big', name:'BIG', country:'DE', aliases:['BIG'], domains:['bigclan.gg'], logoSlugs:['big','berlin-international-gaming'] },
-  { id:'liquid', name:'Liquid', country:'US', aliases:['Liquid','Team Liquid'], domains:['teamliquid.com'], logoSlugs:['team-liquid','liquid'] }
-];
-
-const LOGO_REPO_BASES = [
-  'https://esport-team-logos.global.ssl.fastly.net/esport-team-logos/csgo',
-  'https://raw.githubusercontent.com/lootmarket/esport-team-logos/master/csgo'
-];
-
-function logoCandidateUrls(team) {
-  const urls = [];
-  for (const slug of team.logoSlugs || []) {
-    for (const base of LOGO_REPO_BASES) urls.push(`${base}/${slug}/${slug}-logo.png`);
-  }
-  for (const domain of team.domains || []) {
-    urls.push(`https://logo.clearbit.com/${domain}?size=256`);
-    urls.push(`https://unavatar.io/${domain}?fallback=false`);
-    urls.push(`https://www.google.com/s2/favicons?domain=${domain}&sz=256`);
-  }
-  return [...new Set(urls)];
-}
-
-const logoImageCache = new Map();
-async function fetchImage(url, timeoutMs = 8000) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const r = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
-        'accept':'image/avif,image/webp,image/png,image/svg+xml,image/*,*/*;q=0.8'
-      }
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const type = r.headers.get('content-type') || 'image/png';
-    if (!type.toLowerCase().includes('image')) throw new Error(`Not image: ${type}`);
-    const arrayBuffer = await r.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    if (buffer.length < 100) throw new Error('Image too small');
-    return { buffer, type };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-async function getLogoImage(team) {
-  const cached = logoImageCache.get(team.id);
-  const now = Date.now();
-  if (cached && now - cached.at < 1000 * 60 * 60 * 24) return cached;
-  const errors = [];
-  for (const url of logoCandidateUrls(team)) {
-    try {
-      const image = await fetchImage(url);
-      const found = { ...image, at: now, source: url };
-      logoImageCache.set(team.id, found);
-      return found;
-    } catch (e) {
-      errors.push(`${url}: ${e.message}`);
-    }
-  }
-  throw new Error(`Logo not available for ${team.name}. Tried ${errors.length} sources.`);
-}
-const fallbackUpcoming = [
-  { a:'B8', b:'M80', startsAt:'2026-06-02T17:00:00-03:00', dateText:'02/06 17:00', round:'2-0' },
-  { a:'MIBR', b:'Lynn Vision', startsAt:'2026-06-02T18:00:00-03:00', dateText:'02/06 18:00', round:'1-1' },
-  { a:'HEROIC', b:'BIG', startsAt:'2026-06-02T19:00:00-03:00', dateText:'02/06 19:00', round:'0-2' }
+  { id:'b8', pandaId:null, name:'B8', aliases:['B8'] },
+  { id:'tyloo', pandaId:null, name:'TYLOO', aliases:['TYLOO'] },
+  { id:'mibr', pandaId:null, name:'MIBR', aliases:['MIBR'] },
+  { id:'thunder', pandaId:null, name:'THUNDER dOWNUNDER', aliases:['THUNDER dOWNUNDER','Thunder dOWNUNDER','Talon','TALON'] },
+  { id:'betboom', pandaId:null, name:'BetBoom', aliases:['BetBoom','BetBoom Team'] },
+  { id:'gaimin', pandaId:null, name:'Gaimin Gladiators', aliases:['Gaimin Gladiators'] },
+  { id:'gamerlegion', pandaId:null, name:'GamerLegion', aliases:['GamerLegion'] },
+  { id:'nrg', pandaId:null, name:'NRG', aliases:['NRG'] },
+  { id:'heroic', pandaId:null, name:'HEROIC', aliases:['HEROIC','Heroic'] },
+  { id:'sharks', pandaId:null, name:'Sharks', aliases:['Sharks','Sharks Esports'] },
+  { id:'sinners', pandaId:null, name:'SINNERS', aliases:['SINNERS','Sinners'] },
+  { id:'flyquest', pandaId:null, name:'FlyQuest', aliases:['FlyQuest'] },
+  { id:'m80', pandaId:null, name:'M80', aliases:['M80'] },
+  { id:'lynnvision', pandaId:null, name:'Lynn Vision', aliases:['Lynn Vision','Lynn Vision Gaming'] },
+  { id:'big', pandaId:null, name:'BIG', aliases:['BIG'] },
+  { id:'liquid', pandaId:null, name:'Liquid', aliases:['Liquid','Team Liquid'] }
 ];
 
 const fallbackMatches = [
-  { a:'B8', b:'TYLOO', scoreA:13, scoreB:6, map:'Mirage', round:'Swiss Round 1', status:'finished' },
-  { a:'MIBR', b:'THUNDER dOWNUNDER', scoreA:6, scoreB:13, map:'Inferno', round:'Swiss Round 1', status:'finished' },
-  { a:'BetBoom', b:'Gaimin Gladiators', scoreA:13, scoreB:4, map:'Dust2', round:'Swiss Round 1', status:'finished' },
-  { a:'GamerLegion', b:'NRG', scoreA:13, scoreB:10, map:'Inferno', round:'Swiss Round 1', status:'finished' },
-  { a:'HEROIC', b:'Sharks', scoreA:10, scoreB:13, map:'Nuke', round:'Swiss Round 1', status:'finished' },
-  { a:'SINNERS', b:'FlyQuest', scoreA:14, scoreB:16, map:'Ancient', round:'Swiss Round 1', status:'finished' },
-  { a:'M80', b:'Lynn Vision', scoreA:13, scoreB:8, map:'Inferno', round:'Swiss Round 1', status:'finished' },
-  { a:'BIG', b:'Liquid', scoreA:10, scoreB:13, map:'Nuke', round:'Swiss Round 1', status:'finished' }
+  { id:'fb-1', a:'B8', b:'TYLOO', status:'finished', winner:'B8', scoreA:1, scoreB:0, startsAt:'2026-06-02T11:00:00Z', round:'Round 1', source:'fallback' },
+  { id:'fb-2', a:'MIBR', b:'THUNDER dOWNUNDER', status:'finished', winner:'THUNDER dOWNUNDER', scoreA:0, scoreB:1, startsAt:'2026-06-02T11:00:00Z', round:'Round 1', source:'fallback' },
+  { id:'fb-3', a:'BetBoom', b:'Gaimin Gladiators', status:'finished', winner:'BetBoom', scoreA:1, scoreB:0, startsAt:'2026-06-02T12:00:00Z', round:'Round 1', source:'fallback' },
+  { id:'fb-4', a:'GamerLegion', b:'NRG', status:'finished', winner:'GamerLegion', scoreA:1, scoreB:0, startsAt:'2026-06-02T12:00:00Z', round:'Round 1', source:'fallback' },
+  { id:'fb-5', a:'HEROIC', b:'Sharks', status:'finished', winner:'Sharks', scoreA:0, scoreB:1, startsAt:'2026-06-02T13:00:00Z', round:'Round 1', source:'fallback' },
+  { id:'fb-6', a:'SINNERS', b:'FlyQuest', status:'finished', winner:'FlyQuest', scoreA:0, scoreB:1, startsAt:'2026-06-02T13:00:00Z', round:'Round 1', source:'fallback' },
+  { id:'fb-7', a:'M80', b:'Lynn Vision', status:'finished', winner:'M80', scoreA:1, scoreB:0, startsAt:'2026-06-02T14:00:00Z', round:'Round 1', source:'fallback' },
+  { id:'fb-8', a:'BIG', b:'Liquid', status:'finished', winner:'Liquid', scoreA:0, scoreB:1, startsAt:'2026-06-02T14:00:00Z', round:'Round 1', source:'fallback' }
 ];
 
-function send(res, status, body, type='application/json') {
-  res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
-  res.end(body);
+const fallbackUpcoming = [
+  { id:'up-1', a:'B8', b:'M80', status:'scheduled', startsAt:'2026-06-02T20:00:00Z', round:'2-0' },
+  { id:'up-2', a:'MIBR', b:'Lynn Vision', status:'scheduled', startsAt:'2026-06-02T21:00:00Z', round:'1-1' },
+  { id:'up-3', a:'HEROIC', b:'BIG', status:'scheduled', startsAt:'2026-06-02T22:00:00Z', round:'0-2' }
+];
+
+let cache = { at: 0, data: null, error: null };
+
+function slugify(value) {
+  return String(value || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
-function normalize(s) { return String(s||'').toLowerCase().replace(/&amp;/g,'&').replace(/[^a-z0-9]+/g,' ').trim(); }
-function stripTags(s) { return String(s||'').replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim(); }
-async function fetchText(url, timeoutMs = 9000) {
+function compact(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+function teamKey(name) {
+  const n = compact(name);
+  const found = fallbackTeams.find(t => [t.name, ...(t.aliases || [])].some(a => compact(a) === n));
+  return found?.id || slugify(name);
+}
+function firstDefined(...values) {
+  return values.find(v => v !== undefined && v !== null && v !== '');
+}
+function pandaHeaders() {
+  return {
+    'Authorization': `Bearer ${PANDASCORE_TOKEN}`,
+    'Accept': 'application/json',
+    'User-Agent': 'cs2-pickem-tracker/3.0 (+render)'
+  };
+}
+async function pandaGet(endpoint, params = {}) {
+  if (!PANDASCORE_TOKEN) throw new Error('PANDASCORE_TOKEN não configurado');
+  const url = new URL(API_BASE + endpoint);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
+  }
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const r = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'user-agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
-        'accept-language':'en-US,en;q=0.9',
-        'accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-        'referer':'https://www.hltv.org/'
-      }
-    });
-    if (!r.ok) throw new Error(`HTTP ${r.status} ${url}`);
-    return await r.text();
+    const res = await fetch(url, { headers: pandaHeaders(), signal: controller.signal });
+    const text = await res.text();
+    if (!res.ok) throw new Error(`PandaScore ${res.status}: ${text.slice(0, 240)}`);
+    return JSON.parse(text);
   } finally {
-    clearTimeout(timer);
+    clearTimeout(timeout);
   }
 }
-
-function teamByName(name) {
-  const n = normalize(name);
-  return fallbackTeams.find(t => [t.name, ...(t.aliases||[])].some(a => normalize(a) === n))
-      || fallbackTeams.find(t => n.includes(normalize(t.name)) || normalize(t.name).includes(n));
+function eventText(match) {
+  return [
+    match.name,
+    match.slug,
+    match.league?.name,
+    match.league?.slug,
+    match.serie?.full_name,
+    match.serie?.name,
+    match.serie?.slug,
+    match.tournament?.name,
+    match.tournament?.slug,
+    ...(match.opponents || []).map(o => o?.opponent?.name)
+  ].filter(Boolean).join(' ').toLowerCase();
 }
-function parseLogos(html) {
-  const logos = {};
-  for (const t of fallbackTeams) {
-    const names = [t.name, ...(t.aliases||[])].map(x => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-    for (const nm of names) {
-      const re = new RegExp(`<img[^>]+(?:alt|title)=["']${nm}["'][^>]+src=["']([^"']+)["']|<img[^>]+src=["']([^"']+)["'][^>]+(?:alt|title)=["']${nm}["']`, 'i');
-      const m = html.match(re);
-      if (m) {
-        let src = m[1] || m[2];
-        if (src.startsWith('//')) src = 'https:' + src;
-        if (src.startsWith('/')) src = 'https://www.hltv.org' + src;
-        logos[t.id] = src;
-        break;
-      }
+function isTargetEvent(match) {
+  const text = eventText(match);
+  const hasEventKeyword = EVENT_KEYWORDS.length === 0 || EVENT_KEYWORDS.every(k => text.includes(k));
+  const hasKnownTeam = fallbackTeams.some(t => [t.name, ...(t.aliases || [])].some(alias => text.includes(alias.toLowerCase())));
+  return hasEventKeyword || (hasKnownTeam && text.includes('cologne')) || (hasKnownTeam && text.includes('major'));
+}
+function isWithinEventWindow(match) {
+  const date = match.begin_at || match.scheduled_at || match.original_scheduled_at;
+  if (!date) return true;
+  const ts = Date.parse(date);
+  return ts >= Date.parse(EVENT_START) - 86400000 && ts <= Date.parse(EVENT_END) + 86400000;
+}
+async function fetchPandaMatches() {
+  const common = { per_page: '100' };
+  const calls = [
+    pandaGet('/csgo/matches', { ...common, sort: 'begin_at', 'range[begin_at]': `${EVENT_START},${EVENT_END}` }),
+    pandaGet('/csgo/matches/running', common),
+    pandaGet('/csgo/matches/upcoming', { ...common, sort: 'begin_at' }),
+    pandaGet('/csgo/matches/past', { ...common, sort: '-begin_at', 'range[begin_at]': `${EVENT_START},${EVENT_END}` })
+  ];
+  const settled = await Promise.allSettled(calls);
+  const all = [];
+  const errors = [];
+  for (const item of settled) {
+    if (item.status === 'fulfilled' && Array.isArray(item.value)) all.push(...item.value);
+    if (item.status === 'rejected') errors.push(item.reason.message);
+  }
+  if (!all.length && errors.length) throw new Error(errors.join(' | '));
+  const unique = Array.from(new Map(all.map(m => [m.id, m])).values());
+  let filtered = unique.filter(m => isWithinEventWindow(m) && isTargetEvent(m));
+  if (filtered.length < 4) {
+    const knownTeamMatches = unique.filter(m => isWithinEventWindow(m) && fallbackTeams.some(t => eventText(m).includes(t.name.toLowerCase())));
+    if (knownTeamMatches.length > filtered.length) filtered = knownTeamMatches;
+  }
+  return filtered;
+}
+function readTeamFromOpponent(opponent) {
+  const raw = opponent?.opponent || opponent;
+  if (!raw || !raw.name) return null;
+  const id = teamKey(raw.name);
+  return {
+    id,
+    pandaId: raw.id || null,
+    name: raw.name,
+    image: raw.image_url || raw.image || null,
+    acronym: raw.acronym || null
+  };
+}
+function convertMatch(match) {
+  const opponents = (match.opponents || []).map(readTeamFromOpponent).filter(Boolean);
+  if (opponents.length < 2) return null;
+  const [a, b] = opponents;
+  const results = match.results || [];
+  const scoreA = firstDefined(results.find(r => r.team_id === a.pandaId)?.score, null);
+  const scoreB = firstDefined(results.find(r => r.team_id === b.pandaId)?.score, null);
+  let winner = null;
+  if (match.winner_id) {
+    if (match.winner_id === a.pandaId) winner = a.name;
+    if (match.winner_id === b.pandaId) winner = b.name;
+  }
+  if (!winner && Number.isFinite(Number(scoreA)) && Number.isFinite(Number(scoreB)) && scoreA !== scoreB) {
+    winner = Number(scoreA) > Number(scoreB) ? a.name : b.name;
+  }
+  const status = ['finished', 'canceled'].includes(match.status) ? match.status : (['running', 'not_started'].includes(match.status) ? match.status : match.status || 'scheduled');
+  return {
+    id: String(match.id),
+    a: a.name,
+    b: b.name,
+    teamAId: a.id,
+    teamBId: b.id,
+    status,
+    winner,
+    scoreA: scoreA ?? null,
+    scoreB: scoreB ?? null,
+    startsAt: match.begin_at || match.scheduled_at || match.original_scheduled_at,
+    round: firstDefined(match.match_type, match.name, match.tournament?.name, match.serie?.full_name, ''),
+    league: match.league?.name || '',
+    serie: match.serie?.full_name || match.serie?.name || '',
+    tournament: match.tournament?.name || '',
+    source: 'PandaScore'
+  };
+}
+function mergeTeams(matches) {
+  const map = new Map(fallbackTeams.map(t => [t.id, { ...t, image: null }]));
+  for (const m of matches) {
+    for (const opp of (m.opponents || [])) {
+      const t = readTeamFromOpponent(opp);
+      if (!t) continue;
+      const existing = map.get(t.id) || {};
+      map.set(t.id, { ...existing, ...t, name: existing.name || t.name, image: t.image || existing.image || null });
     }
   }
-  return logos;
+  return Array.from(map.values()).sort((a,b) => a.name.localeCompare(b.name));
 }
-function parseUpcoming(html) {
-  const text = stripTags(html);
-  const items = [];
-  const names = fallbackTeams.flatMap(t => [t.name, ...(t.aliases||[])]).sort((a,b)=>b.length-a.length).map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const namePattern = `(${names.join('|')})`;
-  const re = new RegExp(`${namePattern}\s+(?:vs|v|-)\s+${namePattern}`, 'gi');
-  let m; const seen = new Set();
-  while ((m = re.exec(text)) !== null && items.length < 12) {
-    const a = teamByName(m[1]); const b = teamByName(m[2]);
-    if (!a || !b || a.id === b.id) continue;
-    const key = [a.id,b.id].sort().join('-');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    items.push({ a:a.name, b:b.name, startsAt:null, dateText:'Horário na HLTV', round:'Próximo jogo' });
+function calculateStandings(teams, matches) {
+  const standings = new Map(teams.map(t => [t.id, { id:t.id, name:t.name, image:t.image || null, wins:0, losses:0, pending:0 }]));
+  const converted = matches.map(convertMatch).filter(Boolean);
+  for (const m of converted) {
+    if (!standings.has(m.teamAId)) standings.set(m.teamAId, { id:m.teamAId, name:m.a, image:null, wins:0, losses:0, pending:0 });
+    if (!standings.has(m.teamBId)) standings.set(m.teamBId, { id:m.teamBId, name:m.b, image:null, wins:0, losses:0, pending:0 });
+    const a = standings.get(m.teamAId);
+    const b = standings.get(m.teamBId);
+    if (m.status === 'finished' && m.winner) {
+      const winnerId = teamKey(m.winner);
+      if (winnerId === m.teamAId) { a.wins++; b.losses++; }
+      else if (winnerId === m.teamBId) { b.wins++; a.losses++; }
+    } else if (m.status !== 'canceled') {
+      a.pending++; b.pending++;
+    }
   }
-  return items;
+  return Array.from(standings.values()).sort((a,b) => b.wins - a.wins || a.losses - b.losses || a.name.localeCompare(b.name));
 }
-
-function parseResults(html) {
-  const text = stripTags(html);
-  const matches = [];
-  const names = fallbackTeams.flatMap(t => [t.name, ...(t.aliases||[])]).sort((a,b)=>b.length-a.length).map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const namePattern = `(${names.join('|')})`;
-  const re = new RegExp(`${namePattern}\\s+(\\d{1,2})\\s*[:\\-]\\s*(\\d{1,2})\\s+${namePattern}`, 'gi');
-  let m;
-  const seen = new Set();
-  while ((m = re.exec(text)) !== null) {
-    const a = teamByName(m[1]); const b = teamByName(m[4]);
-    if (!a || !b || a.id === b.id) continue;
-    const scoreA = Number(m[2]); const scoreB = Number(m[3]);
-    const key = [a.id,b.id,scoreA,scoreB].join('-');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    matches.push({ a:a.name, b:b.name, scoreA, scoreB, map:'', round:'HLTV', status:'finished' });
-  }
-  return matches;
-}
-function standingsFromMatches(matches) {
-  const st = Object.fromEntries(fallbackTeams.map(t => [t.id, { id:t.id, name:t.name, wins:0, losses:0, status:'alive', logo:null, country:t.country }]));
-  for (const m of matches) {
-    const a = teamByName(m.a), b = teamByName(m.b);
-    if (!a || !b || m.scoreA === m.scoreB) continue;
-    if (m.scoreA > m.scoreB) { st[a.id].wins++; st[b.id].losses++; }
-    else { st[b.id].wins++; st[a.id].losses++; }
-  }
-  for (const s of Object.values(st)) {
-    if (s.wins >= 3) s.status = 'qualified';
-    if (s.losses >= 3) s.status = 'eliminated';
-  }
-  return st;
-}
-async function liveData() {
-  let source = 'fallback';
-  let logos = {};
-  let matches = fallbackMatches;
-  let schedule = fallbackUpcoming;
-  const errors = [];
+async function buildEventState(force = false) {
+  const now = Date.now();
+  if (!force && cache.data && now - cache.at < CACHE_SECONDS * 1000) return cache.data;
+  let rawMatches = [];
+  let apiError = null;
   try {
-    const [eventHtml, resultsHtml, matchesHtml] = await Promise.all([fetchText(HLTV_EVENT), fetchText(HLTV_RESULTS), fetchText(HLTV_MATCHES).catch(()=> '')]);
-    source = 'hltv';
-    logos = Object.fromEntries(fallbackTeams.map(t => [t.id, `/api/logo/${t.id}`]));
-    const parsed = parseResults(resultsHtml);
-    if (parsed.length) matches = parsed;
-    const upcoming = matchesHtml ? parseUpcoming(matchesHtml) : [];
-    if (upcoming.length) schedule = upcoming;
-  } catch (e) {
-    errors.push(e.message);
-    logos = Object.fromEntries(fallbackTeams.map(t => [t.id, `/api/logo/${t.id}`]));
+    rawMatches = await fetchPandaMatches();
+  } catch (error) {
+    apiError = error.message;
   }
-  const standings = standingsFromMatches(matches);
-  for (const id in standings) {
-    const base = fallbackTeams.find(t => t.id === id);
-    standings[id].logo = logos[id] || null;
+  const usingFallback = rawMatches.length === 0;
+  const teams = usingFallback ? fallbackTeams.map(t => ({ ...t, image:null })) : mergeTeams(rawMatches);
+  const converted = usingFallback ? fallbackMatches : rawMatches.map(convertMatch).filter(Boolean);
+  const finished = converted.filter(m => m.status === 'finished');
+  const upcoming = (usingFallback ? fallbackUpcoming : converted.filter(m => m.status !== 'finished' && m.status !== 'canceled'))
+    .filter(m => !m.startsAt || Date.parse(m.startsAt) >= Date.now() - 3 * 3600000)
+    .sort((a,b) => Date.parse(a.startsAt || 0) - Date.parse(b.startsAt || 0))
+    .slice(0, 20);
+  const standings = calculateStandings(teams, usingFallback ? [] : rawMatches);
+  if (usingFallback) {
+    // Fallback standings from fallback converted matches.
+    const map = new Map(teams.map(t => [t.id, { id:t.id, name:t.name, image:null, wins:0, losses:0, pending:0 }]));
+    for (const m of fallbackMatches) {
+      const aId = teamKey(m.a), bId = teamKey(m.b), wId = teamKey(m.winner);
+      if (wId === aId) { map.get(aId).wins++; map.get(bId).losses++; }
+      if (wId === bId) { map.get(bId).wins++; map.get(aId).losses++; }
+    }
+    standings.splice(0, standings.length, ...Array.from(map.values()).sort((a,b)=>b.wins-a.wins||a.losses-b.losses||a.name.localeCompare(b.name)));
   }
-  return { ok:true, source, updatedAt:new Date().toISOString(), event:{ name:'IEM Cologne Major 2026 — Stage 1', hltv:HLTV_EVENT }, teams:fallbackTeams.map(t => ({ id:t.id, name:t.name, country:t.country, aliases:t.aliases, logo:`/api/logo/${t.id}` })), matches, schedule, standings:Object.values(standings), errors };
+  const data = {
+    ok: true,
+    event: { name: EVENT_NAME, keywords: EVENT_KEYWORDS, start: EVENT_START, end: EVENT_END },
+    source: usingFallback ? 'fallback' : 'PandaScore',
+    apiError,
+    updatedAt: new Date().toISOString(),
+    cacheSeconds: CACHE_SECONDS,
+    teams,
+    standings,
+    matches: finished.sort((a,b) => Date.parse(b.startsAt || 0) - Date.parse(a.startsAt || 0)),
+    upcoming
+  };
+  cache = { at: now, data, error: apiError };
+  return data;
 }
-
+function json(res, status, body) {
+  res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': '*' });
+  res.end(JSON.stringify(body));
+}
+function staticFile(res, pathname) {
+  const clean = pathname === '/' ? '/index.html' : pathname;
+  const filePath = path.join(PUBLIC_DIR, decodeURIComponent(clean));
+  if (!filePath.startsWith(PUBLIC_DIR)) return false;
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) return false;
+  const ext = path.extname(filePath).toLowerCase();
+  const types = { '.html':'text/html; charset=utf-8', '.css':'text/css; charset=utf-8', '.js':'text/javascript; charset=utf-8', '.svg':'image/svg+xml', '.png':'image/png', '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.webp':'image/webp' };
+  res.writeHead(200, { 'Content-Type': types[ext] || 'application/octet-stream', 'Cache-Control': ext === '.html' ? 'no-store' : 'public, max-age=3600' });
+  fs.createReadStream(filePath).pipe(res);
+  return true;
+}
 const server = http.createServer(async (req, res) => {
   try {
-    const u = new URL(req.url, `http://${req.headers.host}`);
-    if (u.pathname.startsWith('/api/logo/')) {
-      const id = u.pathname.split('/').pop();
-      const team = fallbackTeams.find(t => t.id === id);
-      if (!team) return send(res, 404, 'Team not found', 'text/plain');
-      try {
-        const img = await getLogoImage(team);
-        res.writeHead(200, {
-          'Content-Type': img.type,
-          'Cache-Control': 'public, max-age=86400',
-          'X-Logo-Source': img.source
-        });
-        return res.end(img.buffer);
-      } catch (e) {
-        return send(res, 404, `Logo not available for ${team.name}`, 'text/plain');
-      }
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    if (url.pathname === '/api/health') return json(res, 200, { ok:true, hasToken: Boolean(PANDASCORE_TOKEN), event: EVENT_NAME });
+    if (url.pathname === '/api/event-state' || url.pathname === '/api/live') {
+      const force = url.searchParams.get('force') === '1';
+      const data = await buildEventState(force);
+      return json(res, 200, data);
     }
-    if (u.pathname === '/api/live') return send(res, 200, JSON.stringify(await liveData()));
-    if (u.pathname === '/api/health') return send(res, 200, JSON.stringify({ok:true}));
-    let filePath = path.join(__dirname, 'public', u.pathname === '/' ? 'index.html' : decodeURIComponent(u.pathname));
-    const base = path.join(__dirname, 'public');
-    if (!filePath.startsWith(base)) return send(res, 403, 'Forbidden', 'text/plain');
-    fs.readFile(filePath, (err, data) => {
-      if (err) return send(res, 404, 'Not found', 'text/plain');
-      const ext = path.extname(filePath).toLowerCase();
-      const types = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp'};
-      send(res, 200, data, types[ext] || 'application/octet-stream');
-    });
-  } catch(e) { send(res, 500, JSON.stringify({ok:false,error:e.message})); }
+    if (url.pathname.startsWith('/api/logo/')) {
+      const id = decodeURIComponent(url.pathname.replace('/api/logo/', ''));
+      const state = await buildEventState(false);
+      const team = state.teams.find(t => t.id === id || slugify(t.name) === id);
+      if (team?.image) {
+        res.writeHead(302, { Location: team.image, 'Cache-Control': 'public, max-age=86400' });
+        return res.end();
+      }
+      return json(res, 404, { ok:false, error:'logo-not-found' });
+    }
+    if (staticFile(res, url.pathname)) return;
+    json(res, 404, { ok:false, error:'not-found' });
+  } catch (error) {
+    console.error(error);
+    json(res, 500, { ok:false, error:error.message });
+  }
 });
-server.listen(PORT, () => console.log(`CS2 Pickem Live Tracker: http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`CS2 Pick'em PandaScore Tracker running on http://localhost:${PORT}`));

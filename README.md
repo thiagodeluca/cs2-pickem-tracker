@@ -1,11 +1,13 @@
-# CS2 Pick'em Tracker — Thiago Deluca
+# CS2 Pick'em Tracker • PandaScore
 
-Tracker web para Pick'em do IEM Cologne Major 2026.
+Projeto de Thiago Deluca.
+
+Tracker de Pick'em para CS2 com dados via PandaScore, salvamento local dos palpites e validação automática.
 
 ## Rodar local
 
 ```bash
-npm install
+export PANDASCORE_TOKEN="seu_token"
 npm start
 ```
 
@@ -15,32 +17,34 @@ Abra:
 http://localhost:8080
 ```
 
-## Publicar no Render
+## Render
 
-Configuração recomendada:
+Configure no Render em **Environment**:
 
 ```text
-Build Command: npm install
-Start Command: npm start
+PANDASCORE_TOKEN=seu_token
+EVENT_NAME=IEM Cologne Major 2026
+EVENT_KEYWORDS=iem,cologne,major
+EVENT_START=2026-06-02T00:00:00Z
+EVENT_END=2026-06-09T23:59:59Z
+CACHE_SECONDS=45
 ```
 
-O servidor usa `process.env.PORT`, então funciona no Render sem ajuste extra.
+Build Command:
 
-## Logos
+```bash
+npm install
+```
 
-Esta versão não depende mais da HLTV para os logos.
+Start Command:
 
-O endpoint `/api/logo/:teamId` tenta buscar e servir a imagem real do time usando várias fontes, nesta ordem:
+```bash
+npm start
+```
 
-1. repositório público `lootmarket/esport-team-logos` via Fastly/GitHub Raw;
-2. logo do domínio oficial do time via Clearbit;
-3. favicon/logo do domínio oficial via Unavatar;
-4. favicon grande via Google S2.
+## Observações
 
-O navegador recebe a imagem pelo próprio backend, então evita parte dos bloqueios de hotlink/CORS. Se todas as fontes falharem, o card cai para iniciais temporárias, mas não usa logo inventado.
-
-## Dados ao vivo
-
-- Resultados/calendário: tenta HLTV primeiro.
-- Se a HLTV bloquear, usa fallback local para manter o tracker funcionando.
-- Palpites ficam salvos no `localStorage` do navegador.
+- O token fica só no backend.
+- O front consome `/api/event-state`.
+- Os palpites do usuário ficam no `localStorage` do navegador.
+- Se a API falhar ou não achar o evento pelo nome, o projeto mantém fallback para não quebrar a tela.

@@ -3,100 +3,94 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>CS2 Pick'em Live Tracker • Thiago Deluca</title>
+  <title>CS2 Pick'em Tracker • Thiago Deluca</title>
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
-  <main class="app-shell">
-    <header class="topbar">
-      <div class="brand-block">
-        <div class="kicker">Pick'em Tracker • CS2 Major</div>
+  <main class="shell">
+    <header class="hero glass">
+      <div>
+        <div class="eyebrow">Pick'em Tracker • CS2 Major</div>
         <h1>IEM Cologne Major 2026</h1>
-        <p>Palpites editáveis, placar suíço ao vivo, calendário e validação automática.</p>
+        <p>Palpites salvos no navegador, resultados via PandaScore e validação automática.</p>
         <small>Projeto de <strong>Thiago Deluca</strong></small>
       </div>
-      <div class="top-actions">
-        <button id="syncBtn" class="btn btn-primary">Atualizar HLTV</button>
+      <div class="hero-actions">
+        <button id="refreshBtn" class="primary">Atualizar PandaScore</button>
+        <button id="clearBtn" class="ghost">Limpar meus palpites</button>
       </div>
     </header>
 
-    <nav id="phaseTabs" class="phase-tabs" aria-label="Fases do evento"></nav>
+    <nav class="tabs" id="phaseTabs"></nav>
 
-    <section class="stats-grid" aria-label="Resumo dos palpites">
-      <article class="stat-card ok"><span id="scoreOk">0</span><b>corretos</b></article>
-      <article class="stat-card alive"><span id="scoreAlive">0</span><b>com chance</b></article>
-      <article class="stat-card dead"><span id="scoreDead">0</span><b>sem chance</b></article>
-      <article class="stat-card sync"><span id="lastSync">--</span><b>última atualização</b></article>
+    <section class="summary">
+      <article class="glass metric metric-ok"><strong id="mCorrect">0</strong><span>Corretos</span></article>
+      <article class="glass metric metric-live"><strong id="mAlive">0</strong><span>Com chance</span></article>
+      <article class="glass metric metric-dead"><strong id="mDead">0</strong><span>Sem chance</span></article>
+      <article class="glass metric"><strong id="mUpdated">--</strong><span>Última atualização</span></article>
     </section>
 
-    <section class="workspace">
-      <aside class="card sidebar sidebar-left">
-        <div class="section-title">
+    <section class="layout">
+      <aside class="glass panel pool-panel">
+        <div class="panel-head">
           <h2>Times disponíveis</h2>
-          <p>Arraste os times para montar seu Pick'em. Tudo fica salvo neste navegador.</p>
+          <p>Arraste para montar seu Pick'em. Salva automático neste navegador.</p>
         </div>
         <div id="teamPool" class="team-list dropzone" data-zone="pool"></div>
       </aside>
 
-      <section class="card pickem-board">
-        <div class="board-header">
+      <section class="glass board-panel">
+        <div class="board-top">
           <div>
-            <h2 id="phaseTitle">Seus palpites</h2>
-            <p id="phaseSubtitle">Comece arrastando 10 times: 2 para 3x0, 6 para avançam e 2 para 0x3.</p>
+            <h2 id="stageTitle">1ª Fase</h2>
+            <p id="stageHelp">Arraste 10 times: 2 para 3x0, 6 para classificados e 2 para 0x3.</p>
           </div>
-          <div class="legend">
-            <span><i class="dot ok"></i>Certo</span>
-            <span><i class="dot alive"></i>Com chance</span>
-            <span><i class="dot dead"></i>Sem chance</span>
-          </div>
+          <div class="legend"><span><i class="ok"></i>Certo</span><span><i class="live"></i>Com chance</span><span><i class="dead"></i>Sem chance</span></div>
         </div>
 
-        <div id="stageContent" class="stage-content">
-          <div class="pick-zones">
-            <section class="pick-section pick-section-compact qualified" id="zone30">
-              <div class="pick-title"><strong>3x0</strong><span>Classificadas perfeitas</span></div>
-              <div class="slots slots-two dropzone" data-zone="threeZero"></div>
-            </section>
-
-            <section class="pick-section advance" id="zoneAdvance">
-              <div class="pick-title"><strong>3x1 / 3x2</strong><span>Classificadas</span></div>
-              <div class="slots slots-grid dropzone" data-zone="advance"></div>
-            </section>
-
-            <section class="pick-section pick-section-compact eliminated" id="zone03">
-              <div class="pick-title"><strong>0x3</strong><span>Eliminadas sem vitória</span></div>
-              <div class="slots slots-two dropzone" data-zone="zeroThree"></div>
-            </section>
-          </div>
+        <div class="pick-grid">
+          <section class="pick-card pick-small good">
+            <header><strong>3x0</strong><span>Classificadas perfeitas</span></header>
+            <div class="slots dropzone" data-zone="threeZero"></div>
+          </section>
+          <section class="pick-card pick-large">
+            <header><strong>3x1 / 3x2</strong><span>Classificadas</span></header>
+            <div class="slots slots-six dropzone" data-zone="advance"></div>
+          </section>
+          <section class="pick-card pick-small bad">
+            <header><strong>0x3</strong><span>Eliminadas sem vitória</span></header>
+            <div class="slots dropzone" data-zone="zeroThree"></div>
+          </section>
         </div>
       </section>
 
-      <aside class="side-stack">
-        <section class="card sidebar sidebar-right">
-          <div class="section-title">
-            <h2>Resultados reais</h2>
-            <p>Fonte: HLTV quando disponível. Se bloquear, usa fallback local.</p>
+      <aside class="side-col">
+        <section class="glass panel live-panel">
+          <div class="panel-head">
+            <h2>Placar suíço</h2>
+            <p id="sourceText">Fonte: carregando...</p>
           </div>
           <div id="standings" class="standings"></div>
         </section>
-
-        <section class="card sidebar sidebar-right calendar-card">
-          <div class="section-title">
-            <h2>Calendário</h2>
-            <p>Próximos jogos detectados ou cadastrados no fallback.</p>
+        <section class="glass panel calendar-panel">
+          <div class="panel-head">
+            <h2>Próximos jogos</h2>
+            <p>Calendário via API quando disponível.</p>
           </div>
-          <div id="calendar" class="calendar-list"></div>
-          <details class="matches-box">
-            <summary>Resultados detectados</summary>
-            <div id="matches" class="matches"></div>
-          </details>
+          <div id="calendar" class="calendar"></div>
         </section>
       </aside>
     </section>
   </main>
 
-  <dialog id="teamModal"><div id="modalContent"></div><button onclick="teamModal.close()" class="btn btn-primary">Fechar</button></dialog>
-  <dialog id="phaseModal"><div id="phaseModalContent"></div><button onclick="phaseModal.close()" class="btn btn-primary">Entendi</button></dialog>
+  <dialog id="phaseDialog">
+    <div class="modal-card">
+      <button id="closeDialog" class="modal-close">×</button>
+      <h3 id="dialogTitle">Fase bloqueada</h3>
+      <p id="dialogText"></p>
+    </div>
+  </dialog>
+
   <script src="/app.js"></script>
 </body>
 </html>
